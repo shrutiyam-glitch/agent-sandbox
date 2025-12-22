@@ -62,6 +62,7 @@ class SandboxClient:
         self,
         template_name: str,
         namespace: str = "default",  # Where Sandbox lives
+        labels: dict[str, str] | None = None,
         gateway_name: str | None = None,  # Name of the Gateway
         gateway_namespace: str = "default",  # Where Gateway lives
         api_url: str | None = None,  # Allow custom URL (DNS or Localhost)
@@ -72,6 +73,7 @@ class SandboxClient:
     ):
         self.template_name = template_name
         self.namespace = namespace
+        self.labels = labels
         self.gateway_name = gateway_name
         self.gateway_namespace = gateway_namespace
         self.base_url = api_url  # If provided, we skip discovery
@@ -112,10 +114,14 @@ class SandboxClient:
     def _create_claim(self):
         """Creates the SandboxClaim custom resource in the Kubernetes cluster."""
         self.claim_name = f"sandbox-claim-{os.urandom(4).hex()}"
+        metadata = {"name": self.claim_name}
+        if self.labels:
+            metadata["labels"] = self.labels
+
         manifest = {
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",
             "kind": "SandboxClaim",
-            "metadata": {"name": self.claim_name},
+            "metadata": metadata,
             "spec": {"sandboxTemplateRef": {"name": self.template_name}}
         }
 
