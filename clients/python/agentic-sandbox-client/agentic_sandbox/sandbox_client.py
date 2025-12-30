@@ -25,20 +25,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from kubernetes import client, config, watch
 
-# Constants for API Groups and Resources
-GATEWAY_API_GROUP = "gateway.networking.k8s.io"
-GATEWAY_API_VERSION = "v1"
-GATEWAY_PLURAL = "gateways"
+from .constants import *
 
-CLAIM_API_GROUP = "extensions.agents.x-k8s.io"
-CLAIM_API_VERSION = "v1alpha1"
-CLAIM_PLURAL_NAME = "sandboxclaims"
-
-SANDBOX_API_GROUP = "agents.x-k8s.io"
-SANDBOX_API_VERSION = "v1alpha1"
-SANDBOX_PLURAL_NAME = "sandboxes"
-
-POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
