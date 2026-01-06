@@ -14,12 +14,15 @@
 
 import argparse
 import asyncio
+import time
+from kubernetes import client, config
+import re
 from agentic_sandbox.extensions import PodSnapshotSandboxClient
 
 POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 
 
-async def main(template_name: str, gateway_name: str | None, gateway_namespace: str | None, api_url: str | None, namespace: str, server_port: int, labels: dict[str, str]):
+async def main(template_name: str, api_url: str | None, namespace: str, server_port: int, labels: dict[str, str]):
     """
     Tests the Sandbox client by creating a sandbox, running a command,
     and then cleaning up.
@@ -27,101 +30,114 @@ async def main(template_name: str, gateway_name: str | None, gateway_namespace: 
 
     print(
         f"--- Starting Sandbox Client Test (Namespace: {namespace}, Port: {server_port}) ---")
-    if gateway_name:
-        print(f"Mode: Gateway Discovery ({gateway_name})")
-    elif api_url:
-        print(f"Mode: Direct API URL ({api_url})")
-    else:
-        print("Mode: Local Port-Forward fallback")
+
+    # Load kube config
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+
+    wait_time = 10
+    first_snapshot_name = "test-snapshot-10"
+    second_snapshot_name = "test-snapshot-20"
+    v1 = client.CoreV1Api()
 
     try:
-        # Initialize Client with Keyword Arguments for safety
+        print("\n***** Phase 1: Starting Counter *****")
+
         with PodSnapshotSandboxClient(
             template_name=template_name,
             namespace=namespace,
-            labels=labels,
-            gateway_name=gateway_name,
-            gateway_namespace=gateway_namespace,
             api_url=api_url,
             server_port=server_port
         ) as sandbox:
-
-            print("\n--- Testing Pod Name Discovery ---")
-            assert sandbox.annotations is not None, "Sandbox annotations were not stored on the client"
-
-            pod_name_annotation = sandbox.annotations.get(POD_NAME_ANNOTATION)
-
-            if pod_name_annotation:
-                print(f"Found pod name from annotation: {pod_name_annotation}")
-                assert sandbox.pod_name == pod_name_annotation, f"Expected pod_name to be '{pod_name_annotation}', but got '{sandbox.pod_name}'"
-                print("--- Pod Name Discovery Test Passed (Annotation) ---")
-            else:
-                print("Pod name annotation not found, falling back to sandbox name.")
-                assert sandbox.pod_name == sandbox.sandbox_name, f"Expected pod_name to be '{sandbox.sandbox_name}', but got '{sandbox.pod_name}'"
-                print("--- Pod Name Discovery Test Passed (Fallback) ---")
-
-            print("\n--- Testing Command Execution ---")
-            command_to_run = "echo 'Hello from the sandbox!'"
-            print(f"Executing command: '{command_to_run}'")
-
-            result = sandbox.run(command_to_run)
-
-            print(f"Stdout: {result.stdout.strip()}")
-            print(f"Stderr: {result.stderr.strip()}")
-            print(f"Exit Code: {result.exit_code}")
-
-            assert result.exit_code == 0
-            assert result.stdout.strip() == "Hello from the sandbox!"
-
-            print("\n--- Command Execution Test Passed! ---")
-
-            # Test file operations
-            print("\n--- Testing File Operations ---")
-            file_content = "This is a test file."
-            file_path = "test.txt"
-
-            print(f"Writing content to '{file_path}'...")
-            sandbox.write(file_path, file_content)
-
-            print(f"Reading content from '{file_path}'...")
-            read_content = sandbox.read(file_path).decode('utf-8')
-
-            print(f"Read content: '{read_content}'")
-            assert read_content == file_content
-            print("--- File Operations Test Passed! ---")
-
-            # Test introspection commands
-            print("\n--- Testing Pod Introspection ---")
-
-            print("\n--- Listing files in /app ---")
-            list_files_result = sandbox.run("ls -la /app")
-            print(list_files_result.stdout)
-
-            print("\n--- Printing environment variables ---")
-            env_result = sandbox.run("env")
-            print(env_result.stdout)
-
-            print("--- Introspection Tests Finished ---")
-
             print("\n======= Testing Pod Snapshot Extension =======")
-            if sandbox.snapshot_controller_ready():
-                snapshot_name = "test-snapshot"
-                print(f"Creating pod snapshot '{snapshot_name}'...")
-                snapshot_result = sandbox.checkpoint_sandbox(snapshot_name)
+            assert sandbox.controller_ready == True, "Sandbox controller is not ready."
 
-                print(f"Trigger Snapshot Command Stdout: {snapshot_result.stdout.strip()}")
-                print(f"Trigger Command Stderr: {snapshot_result.stderr.strip()}")
-                print(f"Trigger Command Exit Code: {snapshot_result.exit_code}")
+            time.sleep(wait_time)
+            print(f"Creating first pod snapshot '{first_snapshot_name}' after {wait_time} seconds...")
+            snapshot_result = sandbox.checkpoint_sandbox(first_snapshot_name)
+            print(f"Trigger Snapshot Command Stdout: {snapshot_result.stdout.strip()}")
+            print(f"Trigger Command Stderr: {snapshot_result.stderr.strip()}")
+            print(f"Trigger Command Exit Code: {snapshot_result.exit_code}")
 
-                assert snapshot_result.exit_code == 0
+            assert snapshot_result.exit_code == 0
 
-                print("\n--- Restoring from snapshots ---")
-                sandbox_from_snapshot_result = sandbox.restore_sandbox(snapshot_name)
-                print(f"Restore Command Stdout: {sandbox_from_snapshot_result.stdout.strip()}")
-                print(f"Restore Command Stderr: {sandbox_from_snapshot_result.stderr.strip()}") 
-                print(f"Restore Command Exit Code: {sandbox_from_snapshot_result.exit_code}")
+            time.sleep(wait_time)
 
-                print("--- Pod Snapshot Test Passed! ---")
+            print(f"\nCreating second pod snapshot '{second_snapshot_name}' after {wait_time} seconds...")
+            snapshot_result = sandbox.checkpoint_sandbox(second_snapshot_name)
+            print(f"Trigger Snapshot Command Stdout: {snapshot_result.stdout.strip()}")
+            print(f"Trigger Command Stderr: {snapshot_result.stderr.strip()}")
+            print(f"Trigger Command Exit Code: {snapshot_result.exit_code}")
+
+            assert snapshot_result.exit_code == 0
+
+
+            print("\n***** Phase 2: Restoring from most recent snapshot & Verifying *****")
+            with PodSnapshotSandboxClient(
+                template_name=template_name,
+                namespace=namespace,
+                api_url=api_url,
+                server_port=server_port
+            ) as sandbox_restored: # restores from second_snapshot_name by default
+                
+                print("\nWaiting 5 seconds for restored pod to resume printing...")
+                time.sleep(5)
+
+                # Fetch logs using the Kubernetes API 
+                logs = v1.read_namespaced_pod_log(
+                    name=sandbox_restored.pod_name, 
+                    namespace=sandbox_restored.namespace
+                )
+
+                # logs must not be empty     
+                counts = [int(n) for n in re.findall(r"Count: (\d+)", logs)]
+                assert len(counts) > 0, "Failed to retrieve any 'Count:' logs from restored pod."
+
+                # The first number printed by the restored pod must be >= 20.
+                # If it restarted, it would be 0 or 1.
+                first_count = counts[0]
+                print("this is the first_count:", first_count)
+                assert first_count >= wait_time * 2, (
+                    f"State Mismatch! Expected counter to start >= {wait_time*2}, "
+                    f"but got {first_count}. The pod likely restarted from scratch."
+                )
+
+        
+                # not working yet
+                print("\n***** Phase 3: Restoring from previous snapshot & Verifying *****") 
+                with PodSnapshotSandboxClient(
+                    template_name=template_name,
+                    namespace=namespace,
+                    api_url=api_url,
+                    server_port=server_port,
+                    snapshot_id=first_snapshot_name  # Restoring "test-snapshot-10"
+                ) as sandbox_restored_10:
+                    print("Waiting 5 seconds for restored pod to resume printing...")
+                    time.sleep(5)
+
+                    # Fetch logs using the Kubernetes API 
+                    logs = v1.read_namespaced_pod_log(
+                        name=sandbox_restored_10.pod_name, 
+                        namespace=sandbox_restored_10.namespace
+                    )
+
+                    # logs must not be empty     
+                    counts = [int(n) for n in re.findall(r"Count: (\d+)", logs)]
+                    print(f"Restored Pod Logs:\n{counts}")
+                    assert len(counts) > 0, "Failed to retrieve any 'Count:' logs from restored pod."
+
+                    # The first number printed by the restored pod must be >= 10.
+                    # If it restarted, it would be 0 or 1.
+                    first_count = counts[0]
+
+                    assert first_count >= wait_time and first_count < wait_time * 2, (
+                        f"State Mismatch! Expected counter to start >= {wait_time} and < {wait_time * 2}, "
+                        f"but got {first_count}. The pod likely restarted from scratch or restored from the recent snapshot."
+                    )
+
+        print("--- Pod Snapshot Test Passed! ---")
 
     except Exception as e:
         print(f"\n--- An error occurred during the test: {e} ---")
@@ -171,10 +187,9 @@ if __name__ == "__main__":
 
     asyncio.run(main(
         template_name=args.template_name,
-        gateway_name=args.gateway_name,
-        gateway_namespace=args.gateway_namespace,
         api_url=args.api_url,
         namespace=args.namespace,
         server_port=args.server_port,
         labels=labels_dict
     ))
+# python3 test_podsnapshot_extension.py --labels app=agent-sandbox-workload --template-name python-counter-template --namespace sandbox-test

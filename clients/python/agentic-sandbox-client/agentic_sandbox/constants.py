@@ -15,7 +15,8 @@ POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 
 PODSNAPSHOT_API_GROUP = "podsnapshot.gke.io"
 PODSNAPSHOT_API_VERSION = "v1alpha1"
-PODSNAPSHOT_PLURAL = "podsnapshotmanualtriggers"
+PODSNAPSHOT_PLURAL = "podsnapshots"
+PODSNAPSHOTMANUALTRIGGER_PLURAL = "podsnapshotmanualtriggers"
 
 SNAPSHOT_NAMESPACE = "gps-system"
 SNAPSHOT_CONTROLLER_NAME = "gke-pod-snapshot-controller"
