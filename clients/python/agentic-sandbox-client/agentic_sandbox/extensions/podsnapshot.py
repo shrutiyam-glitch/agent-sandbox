@@ -47,15 +47,14 @@ class PodSnapshotSandboxClient(SandboxClient):
         self.podsnapshot_timeout = podsnapshot_timeout
         self.created_snapshots = []
         self.namespace = namespace
-        self.labels = labels
-
+        self.annotations = None
         self.controller_ready = self.snapshot_controller_ready()
 
         if snapshot_id:
             self._configure_snapshot_restore(snapshot_id)
 
         super().__init__(
-            template_name, namespace, labels=labels, server_port=server_port, **kwargs
+            template_name, namespace, labels=labels, annotations=self.annotations, server_port=server_port, **kwargs
         )
 
     def _configure_snapshot_restore(self, snapshot_id: str):
@@ -72,9 +71,9 @@ class PodSnapshotSandboxClient(SandboxClient):
             logging.info(f"Resolving snapshot ID for trigger '{snapshot_id}'...")
             uid = self._get_snapshot_uid(snapshot_id)
             self._check_snapshot_ready(uid)
-            if self.labels is None:
-                self.labels = {}
-            self.labels["podsnapshot.gke.io/ps-name"] = uid
+            if self.annotations is None:
+                self.annotations = {}
+            self.annotations["podsnapshot.gke.io/ps-name"] = uid
             logging.info(f"Using snapshot UID '{uid}' for sandbox restoration.")
         except Exception as e:
             logging.error(f"Failed to prepare snapshot '{snapshot_id}': {e}")

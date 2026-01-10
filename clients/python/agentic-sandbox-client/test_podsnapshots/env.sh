@@ -3,7 +3,7 @@ export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(pro
 
 # Cluster / Node Pool Variables FILL IN BELOW with your own custom values
 
-export CLUSTER=std-podsnapshot-sdk-cluster #change cluster name
+export CLUSTER=pss-pysdk-cluster #change cluster name
 export REGION=us-central1 #change region
 export NODE_LOCATIONS=${REGION}-c
 

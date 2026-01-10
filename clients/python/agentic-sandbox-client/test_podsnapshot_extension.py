@@ -105,10 +105,11 @@ async def main(template_name: str, api_url: str | None, namespace: str, server_p
                 )
 
         
-                # not working yet
+                # TODO: not working yet
                 print("\n***** Phase 3: Restoring from previous snapshot & Verifying *****") 
                 with PodSnapshotSandboxClient(
-                    template_name=template_name,
+                    template_name="python-counter-template",
+                    labels=labels,
                     namespace=namespace,
                     api_url=api_url,
                     server_port=server_port,

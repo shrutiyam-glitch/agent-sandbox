@@ -51,6 +51,7 @@ class SandboxClient:
         template_name: str,
         namespace: str = "default",  # Where Sandbox lives
         labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
         gateway_name: str | None = None,  # Name of the Gateway
         gateway_namespace: str = "default",  # Where Gateway lives
         api_url: str | None = None,  # Allow custom URL (DNS or Localhost)
@@ -69,13 +70,14 @@ class SandboxClient:
         self.sandbox_ready_timeout = sandbox_ready_timeout
         self.gateway_ready_timeout = gateway_ready_timeout
         self.port_forward_ready_timeout = port_forward_ready_timeout
+        self.annotations = annotations
 
         self.port_forward_process: subprocess.Popen | None = None
 
         self.claim_name: str | None = None
         self.sandbox_name: str | None = None
         self.pod_name: str | None = None
-        self.annotations: dict | None = None
+        # self.annotations: dict | None = None
 
         try:
             config.load_incluster_config()
@@ -105,6 +107,9 @@ class SandboxClient:
         metadata = {"name": self.claim_name}
         if self.labels:
             metadata["labels"] = self.labels
+        if self.annotations:
+            metadata["annotations"] = self.annotations
+            logging.info(f"Adding annotations to SandboxClaim: {self.annotations}")
 
         manifest = {
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",

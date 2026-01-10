@@ -19,7 +19,7 @@ from agentic_sandbox import SandboxClient
 POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 
 
-async def main(template_name: str, gateway_name: str | None, api_url: str | None, namespace: str, server_port: int):
+async def main(template_name: str, gateway_name: str | None, api_url: str | None, namespace: str, gateway_namespace: str, server_port: int):
     """
     Tests the Sandbox client by creating a sandbox, running a command,
     and then cleaning up.
@@ -40,6 +40,7 @@ async def main(template_name: str, gateway_name: str | None, api_url: str | None
             template_name=template_name,
             namespace=namespace,
             gateway_name=gateway_name,
+            gateway_namespace=gateway_namespace,
             api_url=api_url,
             server_port=server_port
         ) as sandbox:
@@ -128,7 +129,8 @@ if __name__ == "__main__":
                         help="Namespace to create sandbox in")
     parser.add_argument("--server-port", type=int, default=8888,
                         help="Port the sandbox container listens on")
-
+    parser.add_argument("--gateway-namespace", default="default",
+                        help="Namespace where the Gateway resource is located")
     args = parser.parse_args()
 
     asyncio.run(main(
@@ -136,5 +138,8 @@ if __name__ == "__main__":
         gateway_name=args.gateway_name,
         api_url=args.api_url,
         namespace=args.namespace,
+        gateway_namespace=args.gateway_namespace,
         server_port=args.server_port
     ))
+
+#python3 test_client.py --template-name python-sandbox-template --namespace sandbox-test --gateway-name external-http-gateway --gateway-namespace sandbox-test
