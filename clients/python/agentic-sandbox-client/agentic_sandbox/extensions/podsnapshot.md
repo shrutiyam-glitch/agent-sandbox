@@ -14,12 +14,22 @@ This file defines the `PodSnapshotSandboxClient` class, which extends the base `
     *   If `snapshot_id` is not provided, the pod snapshot controller restores from the most recent snapshot matching the label of the `SandboxTemplate`, otherwise creates a new `Sandbox`.
 *   **`snapshot_controller_ready(self) -> bool`**:
     *   Checks if the snapshot controller (specifically the self-installed `gps-system`) is running and ready.
-*   **`checkpoint_sandbox(self, snapshot_name: str) -> ExecutionResult`**:
+*   **`checkpoint(self, trigger_name: str) -> ExecutionResult`**:
     *   Triggers a manual snapshot of the current sandbox pod by creating a `PodSnapshotManualTrigger` resource.
     *   Waits for the snapshot to be processed.
     *   The pod snapshot controller creates a `PodSnapshot` resource automatically.
+*  **`list_snapshots(self, policy_name: str, ready_only: bool) -> list`**:
+    *   Queries the Kubernetes API for `PodSnapshot` resources in the client's namespace.
+    *   Performs client-side filtering to isolate snapshots belonging to the specific policy.
+    *   If ready_only is `True` (default), it filters out any failed or pending snapshots, returning only valid restore points.
+    *   Returns a list of snapshot metadata dictionaries, sorted by `creationTimestamp` (newest first).
+*   **`delete_snapshots(self, **filters) -> int`**:
+    *   Performs criteria-based deletion of snapshot resources.
+    *   If `snapshot_id` is provided, issues a direct deletion request for that specific resource.
+    *   If filtering by `metadata` (e.g., `trigger_name`), it enforces that a `policy_name` is provided to scope the search. It then identifies matching snapshots (including failed/pending ones) and deletes them.
+    *   Returns the count of successfully deleted snapshots.
 *   **Automatic Cleanup**:
-    *   The `__exit__` method attempts to clean up snapshots `PodSnapshot` and triggers `PodSnapshotManualTrigger` created during the session.
+    *   The `__exit__` method attempts to clean up triggers `PodSnapshotManualTrigger` created during the session.
 
 ## `test_podsnapshot_extension.py`
 

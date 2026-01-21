@@ -40,6 +40,7 @@ async def main(template_name: str, api_url: str | None, namespace: str, server_p
     wait_time = 10
     first_snapshot_name = "test-snapshot-10"
     second_snapshot_name = "test-snapshot-20"
+    policy_name = "example-psp-workload"
     v1 = client.CoreV1Api()
 
     try:
@@ -56,7 +57,7 @@ async def main(template_name: str, api_url: str | None, namespace: str, server_p
 
             time.sleep(wait_time)
             print(f"Creating first pod snapshot '{first_snapshot_name}' after {wait_time} seconds...")
-            snapshot_result = sandbox.checkpoint_sandbox(first_snapshot_name)
+            snapshot_result = sandbox.checkpoint(first_snapshot_name)
             print(f"Trigger Snapshot Command Stdout: {snapshot_result.stdout.strip()}")
             print(f"Trigger Command Stderr: {snapshot_result.stderr.strip()}")
             print(f"Trigger Command Exit Code: {snapshot_result.exit_code}")
@@ -66,7 +67,7 @@ async def main(template_name: str, api_url: str | None, namespace: str, server_p
             time.sleep(wait_time)
 
             print(f"\nCreating second pod snapshot '{second_snapshot_name}' after {wait_time} seconds...")
-            snapshot_result = sandbox.checkpoint_sandbox(second_snapshot_name)
+            snapshot_result = sandbox.checkpoint(second_snapshot_name)
             print(f"Trigger Snapshot Command Stdout: {snapshot_result.stdout.strip()}")
             print(f"Trigger Command Stderr: {snapshot_result.stderr.strip()}")
             print(f"Trigger Command Exit Code: {snapshot_result.exit_code}")
@@ -74,69 +75,77 @@ async def main(template_name: str, api_url: str | None, namespace: str, server_p
             assert snapshot_result.exit_code == 0
 
 
-            print("\n***** Phase 2: Restoring from most recent snapshot & Verifying *****")
-            with PodSnapshotSandboxClient(
-                template_name=template_name,
-                namespace=namespace,
-                api_url=api_url,
-                server_port=server_port
-            ) as sandbox_restored: # restores from second_snapshot_name by default
-                
-                print("\nWaiting 5 seconds for restored pod to resume printing...")
-                time.sleep(5)
+        print("\n***** Phase 2: Restoring from most recent snapshot & Verifying *****")
+        with PodSnapshotSandboxClient(
+            template_name=template_name,
+            namespace=namespace,
+            api_url=api_url,
+            server_port=server_port
+        ) as sandbox_restored: # restores from second_snapshot_name by default
+            
+            print("\nWaiting 5 seconds for restored pod to resume printing...")
+            time.sleep(5)
 
-                # Fetch logs using the Kubernetes API 
-                logs = v1.read_namespaced_pod_log(
-                    name=sandbox_restored.pod_name, 
-                    namespace=sandbox_restored.namespace
-                )
+            # Fetch logs using the Kubernetes API 
+            logs = v1.read_namespaced_pod_log(
+                name=sandbox_restored.pod_name, 
+                namespace=sandbox_restored.namespace
+            )
 
-                # logs must not be empty     
-                counts = [int(n) for n in re.findall(r"Count: (\d+)", logs)]
-                assert len(counts) > 0, "Failed to retrieve any 'Count:' logs from restored pod."
+            # logs must not be empty     
+            counts = [int(n) for n in re.findall(r"Count: (\d+)", logs)]
+            assert len(counts) > 0, "Failed to retrieve any 'Count:' logs from restored pod."
 
-                # The first number printed by the restored pod must be >= 20.
-                # If it restarted, it would be 0 or 1.
-                first_count = counts[0]
-                print("this is the first_count:", first_count)
-                assert first_count >= wait_time * 2, (
-                    f"State Mismatch! Expected counter to start >= {wait_time*2}, "
-                    f"but got {first_count}. The pod likely restarted from scratch."
-                )
-
+            # The first number printed by the restored pod must be >= 20.
+            # If it restarted, it would be 0 or 1.
+            first_count = counts[0]
+            print("this is the first_count:", first_count)
+            assert first_count >= wait_time * 2, (
+                f"State Mismatch! Expected counter to start >= {wait_time*2}, "
+                f"but got {first_count}. The pod likely restarted from scratch."
+            )
         
-                # TODO: not working yet
-                print("\n***** Phase 3: Restoring from previous snapshot & Verifying *****") 
-                with PodSnapshotSandboxClient(
-                    template_name="python-counter-template",
-                    labels=labels,
-                    namespace=namespace,
-                    api_url=api_url,
-                    server_port=server_port,
-                    snapshot_id=first_snapshot_name  # Restoring "test-snapshot-10"
-                ) as sandbox_restored_10:
-                    print("Waiting 5 seconds for restored pod to resume printing...")
-                    time.sleep(5)
+            print("\n***** List all existing ready snapshots with the policy name. *****") 
+            snapshots = sandbox_restored.list_snapshots(policy_name=policy_name)
+            for snap in snapshots:
+                print(f"Snapshot ID: {snap['snapshot_id']}, Triggered By: {snap['trigger_name']}, Source Pod: {snap['source_pod']}, Creation Time: {snap['creationTimestamp']}, Policy Name: {snap['policy_name']}")
+        
+            print("\n**** Deleting snapshots *****")
+            deleted_snapshots = sandbox_restored.delete_snapshots(policy_name=policy_name)
+            print(f"Deleted Snapshots: {deleted_snapshots}")
+    
+        # TODO: not working yet
+        print("\n***** Phase 3: Restoring from previous snapshot & Verifying *****") 
+        with PodSnapshotSandboxClient(
+            template_name=template_name,
+            labels=labels,
+            namespace=namespace,
+            api_url=api_url,
+            server_port=server_port,
+            trigger_name=first_snapshot_name  # Restoring "test-snapshot-10"
+        ) as sandbox_restored_10:
+            print("Waiting 5 seconds for restored pod to resume printing...")
+            time.sleep(5)
 
-                    # Fetch logs using the Kubernetes API 
-                    logs = v1.read_namespaced_pod_log(
-                        name=sandbox_restored_10.pod_name, 
-                        namespace=sandbox_restored_10.namespace
-                    )
+            # Fetch logs using the Kubernetes API 
+            logs = v1.read_namespaced_pod_log(
+                name=sandbox_restored_10.pod_name, 
+                namespace=sandbox_restored_10.namespace
+            )
 
-                    # logs must not be empty     
-                    counts = [int(n) for n in re.findall(r"Count: (\d+)", logs)]
-                    print(f"Restored Pod Logs:\n{counts}")
-                    assert len(counts) > 0, "Failed to retrieve any 'Count:' logs from restored pod."
+            # logs must not be empty     
+            counts = [int(n) for n in re.findall(r"Count: (\d+)", logs)]
+            print(f"Restored Pod Logs:\n{counts}")
+            assert len(counts) > 0, "Failed to retrieve any 'Count:' logs from restored pod."
 
-                    # The first number printed by the restored pod must be >= 10.
-                    # If it restarted, it would be 0 or 1.
-                    first_count = counts[0]
+            # The first number printed by the restored pod must be >= 10.
+            # If it restarted, it would be 0 or 1.
+            first_count = counts[0]
 
-                    assert first_count >= wait_time and first_count < wait_time * 2, (
-                        f"State Mismatch! Expected counter to start >= {wait_time} and < {wait_time * 2}, "
-                        f"but got {first_count}. The pod likely restarted from scratch or restored from the recent snapshot."
-                    )
+            assert first_count >= wait_time and first_count < wait_time * 2, (
+                f"State Mismatch! Expected counter to start >= {wait_time} and < {wait_time * 2}, "
+                f"but got {first_count}. The pod likely restarted from scratch or restored from the recent snapshot."
+            )
 
         print("--- Pod Snapshot Test Passed! ---")
 
