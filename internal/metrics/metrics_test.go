@@ -44,6 +44,73 @@ func TestClaimLatencyRecording(t *testing.T) {
 	}
 }
 
+func TestClaimsPerMinuteRecording(t *testing.T) {
+	// Reset any existing state
+	ClaimsPerMinute.Reset()
+	claimTrackerMutex.Lock()
+	claimTracker = make(map[claimLabels][]time.Time)
+	claimTrackerMutex.Unlock()
+
+	labels := claimLabels{
+		namespace:    "default",
+		templateName: "test-tmpl",
+		launchType:   LaunchTypeCold,
+		warmPoolName: "none",
+		podCondition: "not_ready",
+	}
+
+	// Add 3 claims, two within the last minute, one older than a minute
+	now := time.Now()
+	claimTrackerMutex.Lock()
+	claimTracker[labels] = []time.Time{
+		now.Add(-2 * time.Minute),
+		now.Add(-30 * time.Second),
+		now.Add(-10 * time.Second),
+	}
+	claimTrackerMutex.Unlock()
+
+	// Compute metrics manually (simulating the worker)
+	computeClaimsPerMinute()
+
+	// Assert the gauge metric exposes the value 2
+	gaugeValue := testutil.ToFloat64(ClaimsPerMinute.WithLabelValues(
+		labels.namespace,
+		labels.templateName,
+		labels.launchType,
+		labels.warmPoolName,
+		labels.podCondition,
+	))
+
+	if gaugeValue != 2.0 {
+		t.Errorf("Expected ClaimsPerMinute gauge to be 2.0, got %f", gaugeValue)
+	}
+
+	// Wait 1 minute and 10 seconds effectively, by shifting time, or just manually injecting older time
+	// To keep test fast, simply update the tracker with older times
+	claimTrackerMutex.Lock()
+	claimTracker[labels] = []time.Time{
+		now.Add(-90 * time.Second),
+		now.Add(-70 * time.Second),
+	}
+	claimTrackerMutex.Unlock()
+
+	// Compute metrics manually again
+	computeClaimsPerMinute()
+
+	// Verify gauge drops to zero when older timestamps are cleared
+	gaugeValueZero := testutil.ToFloat64(ClaimsPerMinute.WithLabelValues(
+		labels.namespace,
+		labels.templateName,
+		labels.launchType,
+		labels.warmPoolName,
+		labels.podCondition,
+	))
+
+	if gaugeValueZero != 0.0 {
+		t.Errorf("Expected ClaimsPerMinute gauge to drop to 0.0, got %f", gaugeValueZero)
+	}
+}
+
 func TestSandboxCreationLatencyRecording(t *testing.T) {
 	testCases := []struct {
 		name       string
