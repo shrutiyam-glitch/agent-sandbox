@@ -1,0 +1,17 @@
+apiVersion: autoscaling.x-k8s.io/v1beta1
+kind: CapacityBuffer
+metadata:
+  name: agent-warmpool-buffer
+  namespace: sandbox-test
+spec:
+  # Maintain a node buffer equal to 200% of the SandboxWarmPool's replicas
+  percentage: 200
+  scalableRef:
+    # apiVersion: extensions.agents.x-k8s.io/v1alpha1
+    kind: SandboxWarmPool
+    name: python-sdk-warmpool
+
+  # The strategy for provisioning. 
+  # standby-capacity creates suspended VMs that resume in ~30s.
+  # active-capacity triggers immediate scale-up.
+  provisioningStrategy: "buffer.x-k8s.io/standby-capacity"

@@ -89,3 +89,21 @@ func TestSandboxClaimCreationRecording(t *testing.T) {
 		})
 	}
 }
+
+func TestWarmPoolReplicasRecording(t *testing.T) {
+	WarmPoolReplicas.Reset()
+	RecordWarmPoolReplicas("default", "test-pool", "test-tmpl", 5)
+
+	if testutil.CollectAndCount(WarmPoolReplicas) != 1 {
+		t.Errorf("Expected 1 observation")
+	}
+}
+
+func TestSandboxClaimPerMinuteRecording(t *testing.T) {
+	SandboxClaimPerMinute.Reset()
+	RecordSandboxClaimPerMinute("default", "test-tmpl", 10)
+
+	if testutil.CollectAndCount(SandboxClaimPerMinute) != 1 {
+		t.Errorf("Expected 1 observation")
+	}
+}

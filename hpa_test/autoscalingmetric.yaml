@@ -1,0 +1,20 @@
+apiVersion: autoscaling.gke.io/v1beta1
+kind: AutoscalingMetric
+metadata:
+  name: agent-active-claim-rate
+  namespace: sandbox-test
+spec:
+  metrics:
+    - pod:
+        selector:
+          matchLabels:
+            app: agent-sandbox-workload # Ensure this matches the labels on your sandbox pods
+        containers:
+          - endpoint:
+              port: 8080
+              path: /metrics
+            metrics:
+              - gauge:
+                  name: agent_sandbox_claim_per_minute
+
+

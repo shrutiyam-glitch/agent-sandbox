@@ -638,11 +638,88 @@ func (r *SandboxClaimReconciler) getTemplate(ctx context.Context, claim *extensi
 // SetupWithManager sets up the controller with the Manager.
 func (r *SandboxClaimReconciler) SetupWithManager(mgr ctrl.Manager, concurrentWorkers int) error {
 	r.MaxConcurrentReconciles = concurrentWorkers
+
+	if err := mgr.Add(r); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&extensionsv1alpha1.SandboxClaim{}).
 		Owns(&v1alpha1.Sandbox{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: concurrentWorkers}).
 		Complete(r)
+}
+
+// Start runs a background loop to compute the rate of SandboxClaim creation per minute.
+func (r *SandboxClaimReconciler) Start(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	// Keep track of previously reported templates to reset them to 0 if they drop to 0 rate
+	activeGauges := make(map[string]map[string]bool)
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("stopping claim rate calculator")
+			return nil
+		case <-ticker.C:
+			r.updateClaimRates(ctx, activeGauges)
+		}
+	}
+}
+
+func (r *SandboxClaimReconciler) updateClaimRates(ctx context.Context, activeGauges map[string]map[string]bool) {
+	logger := log.FromContext(ctx)
+	claims := &extensionsv1alpha1.SandboxClaimList{}
+	if err := r.List(ctx, claims); err != nil {
+		logger.Error(err, "failed to list SandboxClaims for rate calculation")
+		return
+	}
+
+	now := time.Now()
+	oneMinuteAgo := now.Add(-time.Minute)
+
+	// count per namespace and template
+	counts := make(map[string]map[string]int)
+
+	for _, c := range claims.Items {
+		if c.CreationTimestamp.Time.After(oneMinuteAgo) {
+			ns := c.Namespace
+			tpl := c.Spec.TemplateRef.Name
+			if counts[ns] == nil {
+				counts[ns] = make(map[string]int)
+			}
+			counts[ns][tpl]++
+		}
+	}
+
+	// Update gauges
+	currentGauges := make(map[string]map[string]bool)
+	for ns, templates := range counts {
+		if currentGauges[ns] == nil {
+			currentGauges[ns] = make(map[string]bool)
+		}
+		for tpl, count := range templates {
+			asmetrics.RecordSandboxClaimPerMinute(ns, tpl, float64(count))
+			currentGauges[ns][tpl] = true
+			if activeGauges[ns] == nil {
+				activeGauges[ns] = make(map[string]bool)
+			}
+			activeGauges[ns][tpl] = true
+		}
+	}
+
+	// Reset any gauges that were active but are no longer in the current window to 0
+	for ns, templates := range activeGauges {
+		for tpl := range templates {
+			if !currentGauges[ns][tpl] {
+				asmetrics.RecordSandboxClaimPerMinute(ns, tpl, 0.0)
+				delete(activeGauges[ns], tpl)
+			}
+		}
+	}
 }
 
 // reconcileNetworkPolicy ensures a NetworkPolicy exists for the claimed Sandbox.

@@ -72,6 +72,31 @@ var (
 		},
 		[]string{"namespace", "sandbox_template", "launch_type", "warmpool_name", "pod_condition"},
 	)
+
+	// WarmPoolReplicas tracks the current number of replicas in a SandboxWarmPool.
+	// Labels:
+	// - namespace: the namespace of the warm pool
+	// - name: the name of the warm pool
+	// - template_name: the name of the sandbox template
+	WarmPoolReplicas = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "agent_sandbox_warmpool_replicas",
+			Help: "Current number of replicas in the SandboxWarmPool.",
+		},
+		[]string{"namespace", "name", "template_name"},
+	)
+
+	// SandboxClaimPerMinute calculates the rate of SandboxClaims created per minute.
+	// Labels:
+	// - namespace: the namespace of the claim
+	// - sandbox_template: the SandboxTemplateRef
+	SandboxClaimPerMinute = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "agent_sandbox_claim_per_minute",
+			Help: "Rate of SandboxClaims created per minute, exposed as a gauge for HPA scaling.",
+		},
+		[]string{"namespace", "sandbox_template"},
+	)
 )
 
 // Init registers custom metrics with the global controller-runtime registry.
@@ -79,6 +104,8 @@ func init() {
 	metrics.Registry.MustRegister(ClaimStartupLatency)
 	metrics.Registry.MustRegister(SandboxCreationLatency)
 	metrics.Registry.MustRegister(SandboxClaimCreationTotal)
+	metrics.Registry.MustRegister(WarmPoolReplicas)
+	metrics.Registry.MustRegister(SandboxClaimPerMinute)
 }
 
 // RecordClaimStartupLatency records the duration since the provided start time.
@@ -95,4 +122,14 @@ func RecordSandboxCreationLatency(duration time.Duration, namespace, launchType,
 // RecordSandboxClaimCreation increments the total count of created sandbox claims.
 func RecordSandboxClaimCreation(namespace, templateName, launchType, warmPoolName, podCondition string) {
 	SandboxClaimCreationTotal.WithLabelValues(namespace, templateName, launchType, warmPoolName, podCondition).Inc()
+}
+
+// RecordWarmPoolReplicas sets the current number of replicas for a warm pool.
+func RecordWarmPoolReplicas(namespace, name, templateName string, replicas float64) {
+	WarmPoolReplicas.WithLabelValues(namespace, name, templateName).Set(replicas)
+}
+
+// RecordSandboxClaimPerMinute sets the current rate of SandboxClaims created per minute.
+func RecordSandboxClaimPerMinute(namespace, templateName string, rate float64) {
+	SandboxClaimPerMinute.WithLabelValues(namespace, templateName).Set(rate)
 }

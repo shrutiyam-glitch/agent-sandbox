@@ -1,0 +1,10 @@
+apiVersion: extensions.agents.x-k8s.io/v1alpha1
+kind: SandboxClaim
+metadata:
+  name: sandbox-claim-new-2
+  namespace: sandbox-test
+  labels:
+    app: agent-sandbox-workload
+spec:
+  sandboxTemplateRef:
+    name: python-counter-template

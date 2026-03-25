@@ -36,6 +36,7 @@ import (
 	sandboxv1alpha1 "sigs.k8s.io/agent-sandbox/api/v1alpha1"
 	sandboxcontrollers "sigs.k8s.io/agent-sandbox/controllers"
 	extensionsv1alpha1 "sigs.k8s.io/agent-sandbox/extensions/api/v1alpha1"
+	asmetrics "sigs.k8s.io/agent-sandbox/internal/metrics"
 )
 
 const (
@@ -73,6 +74,7 @@ func (r *SandboxWarmPoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// Handle deletion
 	if !warmPool.DeletionTimestamp.IsZero() {
 		log.Info("SandboxWarmPool is being deleted")
+		asmetrics.RecordWarmPoolReplicas(warmPool.Namespace, warmPool.Name, warmPool.Spec.TemplateRef.Name, 0)
 		return ctrl.Result{}, nil
 	}
 
@@ -89,6 +91,8 @@ func (r *SandboxWarmPoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		log.Error(err, "Failed to update SandboxWarmPool status")
 		return ctrl.Result{}, err
 	}
+
+	asmetrics.RecordWarmPoolReplicas(warmPool.Namespace, warmPool.Name, warmPool.Spec.TemplateRef.Name, float64(warmPool.Status.Replicas))
 
 	return ctrl.Result{}, nil
 }
@@ -258,6 +262,9 @@ func (r *SandboxWarmPoolReconciler) createPoolSandbox(ctx context.Context, warmP
 	}
 	// Propagate template ref hash to pod template for NetworkPolicy targeting
 	podLabels[sandboxTemplateRefHash] = sandboxcontrollers.NameHash(warmPool.Spec.TemplateRef.Name)
+
+	// Propagate warmpool label to pod template for HPA to find pods
+	podLabels[warmPoolSandboxLabel] = poolNameHash
 
 	podAnnotations := make(map[string]string)
 	for k, v := range template.Spec.PodTemplate.ObjectMeta.Annotations {

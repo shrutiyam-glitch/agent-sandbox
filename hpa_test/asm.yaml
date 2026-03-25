@@ -1,0 +1,30 @@
+# autoscalingmetric-controller.yaml
+apiVersion: autoscaling.gke.io/v1beta1
+kind: AutoscalingMetric
+metadata:
+  name: agent-active-claim-rate
+  namespace: agent-sandbox-system # Move to the controller's namespace
+spec:
+  metrics:
+  - pod:
+      selector:
+        matchLabels:
+          app: agent-sandbox-controller
+      containers:
+        - endpoint:
+            port: 8080
+            path: /metrics
+          metrics:
+            - gauge:
+                name: agent_sandbox_claim_per_minute
+                prometheusMetricName: "agent_sandbox_claim_per_minute"
+                
+  # - endpoint:
+  #     # Scrape the controller's internal service
+  #     url: "http://agent-sandbox-controller.agent-sandbox-system.svc:8080/metrics"
+  #     metrics:
+  #     - gauge:
+  #         name: agent_sandbox_claim_per_minute
+  #         # prometheusMetricName: "agent_sandbox_claim_per_minute"
+  #         # aggregation: Sum
+
