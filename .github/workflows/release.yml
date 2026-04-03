@@ -1,0 +1,106 @@
+name: Release Automation
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write # Required for Google Auth
+
+jobs:
+  release:
+    name: Promote Images and Draft Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
+          service_account: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Wait for Images and Create Promotion PR
+        id: promote
+        env:
+          # PAT is required to fork and open PRs in kubernetes/k8s.io
+          GH_TOKEN: ${{ secrets.K8S_IO_PAT || secrets.PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          make release-promote TAG=${GITHUB_REF_NAME}
+
+      - name: Wait for Promotion PR to Merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Looking for the promotion PR in kubernetes/k8s.io..."
+          PR_TITLE="Promote agent-sandbox ${GITHUB_REF_NAME}"
+
+          PR_URL=""
+          # Retry searching for the PR up to 10 times (approx 5 minutes)
+          for attempt in {1..10}; do
+            PR_URL=$(gh pr list --repo kubernetes/k8s.io --search "$PR_TITLE in:title" --json url --jq '.[0].url')
+            if [ -n "$PR_URL" ] && [ "$PR_URL" != "null" ]; then
+              break
+            fi
+            echo "PR not found yet (attempt $attempt/10), waiting 30 seconds for GitHub indexing..."
+            sleep 30
+          done
+
+          if [ -z "$PR_URL" ] || [ "$PR_URL" == "null" ]; then
+            echo "❌ Could not find PR URL after retries. Failing workflow."
+            # Exit explicitly
+            exit 1
+          fi
+
+          echo "Found PR: $PR_URL"
+          echo "Waiting for PR to be merged..."
+
+          MERGED=false
+          # Loop for up to 60 times, 5 minutes each (total 5 hours)
+          for i in {1..60}; do
+            STATE=$(gh pr view "$PR_URL" --json state --jq '.state')
+            echo "Current PR state: $STATE"
+
+            if [ "$STATE" == "MERGED" ]; then
+              echo "✅ PR has been merged!"
+              MERGED=true
+              break
+            elif [ "$STATE" == "CLOSED" ]; then
+              echo "❌ PR was closed without merging. Failing the workflow."
+              exit 1
+            fi
+
+            echo "Waiting 5 minutes before checking again (attempt $i/60)..."
+            sleep 300
+          done
+
+          if [ "$MERGED" != "true" ]; then
+            echo "❌ Timed out waiting for PR to merge after 5 hours."
+            exit 1
+          fi
+
+      - name: Generate Manifests and Create Draft Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Providing GEMINI_API_KEY in case release notes generation is integrated
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          make release-publish TAG=${GITHUB_REF_NAME}
