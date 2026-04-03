@@ -44,7 +44,7 @@ jobs:
           # PAT is required to fork and open PRs in kubernetes/k8s.io
           GH_TOKEN: ${{ secrets.K8S_IO_PAT || secrets.PAT || secrets.GITHUB_TOKEN }}
         run: |
-          make release-promote TAG=${GITHUB_REF_NAME}
+          make release-promote TAG="${GITHUB_REF_NAME}"
 
       - name: Wait for Promotion PR to Merge
         env:
@@ -103,4 +103,4 @@ jobs:
           # Providing GEMINI_API_KEY in case release notes generation is integrated
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          make release-publish TAG=${GITHUB_REF_NAME}
+          make release-publish TAG="${GITHUB_REF_NAME}"
