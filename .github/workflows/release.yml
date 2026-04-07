@@ -34,11 +34,11 @@ jobs:
           cd ..
           git clone https://github.com/kubernetes/k8s.io.git
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
-          service_account: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
+      # - name: Authenticate to Google Cloud
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
+      #     service_account: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -47,7 +47,7 @@ jobs:
         id: extract-pr
         env:
           # Use a PAT with permissions to fork/PR kubernetes/k8s.io
-          GH_TOKEN: ${{ secrets.K8S_IO_PAT || secrets.PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # ${{ secrets.K8S_IO_PAT || secrets.PAT || secrets.GITHUB_TOKEN }}
         run: |
           # Capture output to find the PR URL directly
           make release-promote TAG="${GITHUB_REF_NAME}" | tee promote_output.log
