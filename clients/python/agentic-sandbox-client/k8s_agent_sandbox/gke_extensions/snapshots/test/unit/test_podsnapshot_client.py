@@ -81,7 +81,33 @@ class TestPodSnapshotSandboxClient(unittest.TestCase):
         
         result = client.create_sandbox("test-template", "test-ns")
         
-        mock_super_create.assert_called_once_with("test-template", "test-ns")
+        mock_super_create.assert_called_once_with(
+            template="test-template",
+            namespace="test-ns",
+            sandbox_ready_timeout=180,
+            labels=None,
+            annotations={},
+            shutdown_after_seconds=None
+        )
+        self.assertIsInstance(result, SandboxWithSnapshotSupport)
+
+    @patch('k8s_agent_sandbox.sandbox_client.K8sHelper')
+    @patch.object(PodSnapshotSandboxClient, '_check_snapshot_crd_installed', return_value=True)
+    @patch('k8s_agent_sandbox.sandbox_client.SandboxClient.create_sandbox')
+    def test_create_sandbox_with_snapshot_id(self, mock_super_create, mock_check, mock_k8s_helper_cls):
+        client = PodSnapshotSandboxClient()
+        mock_super_create.return_value = MagicMock(spec=SandboxWithSnapshotSupport)
+        
+        result = client.create_sandbox("test-template", "test-ns", snapshot_id="my-snapshot-uid")
+        
+        mock_super_create.assert_called_once_with(
+            template="test-template",
+            namespace="test-ns",
+            sandbox_ready_timeout=180,
+            labels=None,
+            annotations={"podsnapshot.gke.io/ps-name": "my-snapshot-uid"},
+            shutdown_after_seconds=None
+        )
         self.assertIsInstance(result, SandboxWithSnapshotSupport)
 
     @patch('k8s_agent_sandbox.sandbox_client.K8sHelper')

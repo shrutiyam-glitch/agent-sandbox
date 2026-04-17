@@ -60,7 +60,7 @@ class TestSandboxClient(unittest.TestCase):
             
             sandbox = self.client.create_sandbox("test-template", "test-namespace")
             
-            mock_create_claim.assert_called_once_with("sandbox-claim-1234abcd", "test-template", "test-namespace", labels=None, lifecycle=None)
+            mock_create_claim.assert_called_once_with("sandbox-claim-1234abcd", "test-template", "test-namespace", labels=None, lifecycle=None, annotations=None)
             self.mock_k8s_helper.resolve_sandbox_name.assert_called_once_with("sandbox-claim-1234abcd", "test-namespace", 180)
             mock_wait.assert_called_once_with("resolved-id", "test-namespace", ANY)
             self.assertEqual(sandbox, mock_sandbox_instance)
@@ -202,6 +202,7 @@ class TestSandboxClient(unittest.TestCase):
                 "sandbox-claim-1234abcd", "test-template", "test-namespace",
                 labels={"agent": "code-agent", "team": "platform"},
                 lifecycle=None,
+                annotations=None,
             )
 
     def test_create_claim_with_labels(self):

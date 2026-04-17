@@ -43,6 +43,21 @@ class PodSnapshotSandboxClient(SandboxClient[SandboxWithSnapshotSupport]):
                 "Ensure the PodSnapshot CRD is installed."
             )
 
+    def create_sandbox(self, template: str, namespace: str = "default", sandbox_ready_timeout: int = 180, labels: dict[str, str] | None = None, snapshot_id: str | None = None, *, shutdown_after_seconds: int | None = None) -> SandboxWithSnapshotSupport:
+        """Provisions new Sandbox claim with optional snapshot_id."""
+        annotations = {}
+        if snapshot_id:
+            annotations["podsnapshot.gke.io/ps-name"] = snapshot_id
+            
+        return super().create_sandbox(
+            template=template,
+            namespace=namespace,
+            sandbox_ready_timeout=sandbox_ready_timeout,
+            labels=labels,
+            annotations=annotations,
+            shutdown_after_seconds=shutdown_after_seconds
+        )
+
     def _check_snapshot_crd_installed(self) -> bool:
         if getattr(self, "snapshot_crd_installed", False):
             return True
