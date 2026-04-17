@@ -68,8 +68,9 @@ func TestSandboxShutdownTime(t *testing.T) {
 	service.Namespace = ns.Name
 	tc.MustExist(service)
 
-	// Set a shutdown time that ends shortly
-	shutdown := metav1.NewTime(time.Now().Add(10 * time.Second))
+	// Set a shutdown time that ends shortly, truncated to second-level precision (RFC3339) to match
+	// the Kubernetes API's storage behavior.
+	shutdown := metav1.NewTime(time.Now().Add(10 * time.Second)).Rfc3339Copy()
 	framework.MustUpdateObject(tc.ClusterClient, sandboxObj, func(obj *sandboxv1alpha1.Sandbox) {
 		obj.Spec.ShutdownTime = &shutdown
 	})
@@ -94,7 +95,7 @@ func TestSandboxShutdownTime(t *testing.T) {
 	}
 	require.NoError(t, tc.PollUntilObjectMatches(sandboxObj, p...))
 	// Verify that the sandbox was shut down at or after the specified shutdownTime
-	require.True(t, !time.Now().Before(shutdown.Time))
+	require.False(t, time.Now().Before(shutdown.Time))
 	// Verify Pod and Service are deleted
 	require.NoError(t, tc.WaitForObjectNotFound(t.Context(), pod))
 	require.NoError(t, tc.WaitForObjectNotFound(t.Context(), service))

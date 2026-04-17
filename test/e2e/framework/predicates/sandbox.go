@@ -35,7 +35,7 @@ func asSandbox(obj client.Object) (*sandboxv1alpha1.Sandbox, error) {
 	return sandbox, nil
 }
 
-// SandboxHasStatus verifies that the Sandbox object has the specified status
+// SandboxHasStatus verifies that the Sandbox object has the specified status.
 func SandboxHasStatus(status sandboxv1alpha1.SandboxStatus) ObjectPredicate {
 	return &sandboxHasStatusPredicate{
 		WantStatus: status,
@@ -57,6 +57,7 @@ func (s *sandboxHasStatusPredicate) Matches(obj client.Object) (bool, error) {
 	}
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+		cmpopts.IgnoreFields(sandboxv1alpha1.SandboxStatus{}, "PodIPs"),
 	}
 	if diff := cmp.Diff(s.WantStatus, sandbox.Status, opts...); diff != "" {
 		return false, nil

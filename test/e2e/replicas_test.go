@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	sandboxv1alpha1 "sigs.k8s.io/agent-sandbox/api/v1alpha1"
 	"sigs.k8s.io/agent-sandbox/test/e2e/framework"
 	"sigs.k8s.io/agent-sandbox/test/e2e/framework/predicates"
@@ -35,7 +34,7 @@ func TestSandboxReplicas(t *testing.T) {
 	require.NoError(t, tc.CreateWithCleanup(t.Context(), ns))
 	// Create a Sandbox Object
 	sandboxObj := simpleSandbox(ns.Name)
-	sandboxObj.Spec.Replicas = ptr.To(int32(1))
+	sandboxObj.Spec.Replicas = new(int32(1))
 	require.NoError(t, tc.CreateWithCleanup(t.Context(), sandboxObj))
 
 	nameHash := NameHash(sandboxObj.Name)
@@ -57,7 +56,7 @@ func TestSandboxReplicas(t *testing.T) {
 			},
 		}),
 	}
-	require.NoError(t, tc.WaitForObject(t.Context(), sandboxObj, p...))
+	tc.MustWaitForObject(sandboxObj, p...)
 	// Assert Pod and Service objects exist
 	pod := &corev1.Pod{}
 	pod.Name = "my-sandbox"
@@ -71,7 +70,7 @@ func TestSandboxReplicas(t *testing.T) {
 
 	// Set replicas to zero
 	framework.MustUpdateObject(tc.ClusterClient, sandboxObj, func(obj *sandboxv1alpha1.Sandbox) {
-		obj.Spec.Replicas = ptr.To(int32(0))
+		obj.Spec.Replicas = new(int32(0))
 	})
 
 	// Wait for sandbox status to reflect new state
@@ -92,7 +91,7 @@ func TestSandboxReplicas(t *testing.T) {
 			},
 		}),
 	}
-	require.NoError(t, tc.WaitForObject(t.Context(), sandboxObj, p...))
+	tc.MustWaitForObject(sandboxObj, p...)
 	// Verify Pod is deleted but Service still exists
 	require.NoError(t, tc.WaitForObjectNotFound(t.Context(), pod))
 	tc.MustMatchPredicates(service, predicates.NotDeleted())
