@@ -97,6 +97,18 @@ var (
 		},
 		[]string{"namespace", "sandbox_template"},
 	)
+
+	// SandboxClaimPending tracks the current number of pending SandboxClaims.
+	// Labels:
+	// - namespace: the namespace of the claim
+	// - sandbox_template: the SandboxTemplateRef
+	SandboxClaimPending = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "agent_sandbox_claim_pending",
+			Help: "Current number of pending SandboxClaims.",
+		},
+		[]string{"namespace", "sandbox_template"},
+	)
 )
 
 // Init registers custom metrics with the global controller-runtime registry.
@@ -106,6 +118,7 @@ func init() {
 	metrics.Registry.MustRegister(SandboxClaimCreationTotal)
 	metrics.Registry.MustRegister(WarmPoolReplicas)
 	metrics.Registry.MustRegister(SandboxClaimPerMinute)
+	metrics.Registry.MustRegister(SandboxClaimPending)
 }
 
 // RecordClaimStartupLatency records the duration since the provided start time.
@@ -132,4 +145,9 @@ func RecordWarmPoolReplicas(namespace, name, templateName string, replicas float
 // RecordSandboxClaimPerMinute sets the current rate of SandboxClaims created per minute.
 func RecordSandboxClaimPerMinute(namespace, templateName string, rate float64) {
 	SandboxClaimPerMinute.WithLabelValues(namespace, templateName).Set(rate)
+}
+
+// RecordSandboxClaimPending sets the current number of pending SandboxClaims.
+func RecordSandboxClaimPending(namespace, templateName string, count float64) {
+	SandboxClaimPending.WithLabelValues(namespace, templateName).Set(count)
 }

@@ -2,7 +2,7 @@ apiVersion: extensions.agents.x-k8s.io/v1alpha1
 kind: SandboxTemplate
 metadata:
   name: python-counter-template
-  namespace: agent-sandbox-system #sandbox-test
+  namespace: sandbox-test
   labels:
     language: python
 spec:
@@ -16,6 +16,8 @@ spec:
         user-id: "test-user"
     spec:
       serviceAccountName: sandbox-test
+      # automountServiceAccountToken: true
+      # dnsPolicy: ClusterFirst
       # runtimeClassName: gvisor
       containers:
       - name: my-container1
@@ -29,3 +31,15 @@ spec:
               print(f"Count: {i}", flush=True)
               i += 1
               time.sleep(1)
+      # - name: metrics-proxy
+      #   image: us-central1-docker.pkg.dev/shrutiyam-gke-dev/agent-sandbox-repo/prometheus-metric-proxy:v20260405-v0.2.1-36-g6ad4524-dirty
+      #   command: ["/k8s-http-proxy"]
+      #   ports:
+      #   - name: metrics-proxy
+      #     containerPort: 9091
+      #     protocol: TCP
+      #   args:
+      #   - "--port=9091"
+      #   - "--proxy-path=/"
+      #   - "--target-url=http://agent-sandbox-controller.agent-sandbox-system.svc.cluster.local:8080/"
+      #   - "--override-auth=false"

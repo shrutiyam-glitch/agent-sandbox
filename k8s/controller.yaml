@@ -70,6 +70,7 @@ spec:
       containers:
       - name: agent-sandbox-controller
         image: ko://sigs.k8s.io/agent-sandbox/cmd/agent-sandbox-controller # placeholder value, replaced by deployment scripts
+        imagePullPolicy: Always
         args:
         - --leader-elect=true
         ports:
@@ -79,3 +80,15 @@ spec:
         - name: healthz
           containerPort: 8081
           protocol: TCP
+      # - name: metrics-proxy
+      #   image: us-central1-docker.pkg.dev/gke-ai-open-models/agent-sandbox-repo/prometheus-metric-proxy:v20260320-v0.2.1-15-ga2d311d-dirty@sha256:a2b81de81473246d0848be02e1ee571eca6641198ca5c6e57e0a74900abcc334
+      #   imagePullPolicy: IfNotPresent
+      #   command: ["/k8s-http-proxy"]
+      #   ports:
+      #   - name: metrics-proxy
+      #     containerPort: 9091
+      #     protocol: TCP
+      #   args:
+      #   - "--port=9091"
+      #   - "--proxy-path=/"
+      #   - "--target-url=http://localhost:8080"

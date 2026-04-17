@@ -1,0 +1,122 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-autoscaler
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+  annotations:
+    components.gke.io/layer: addon
+rules:
+# leader election
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  resourceNames: ["cluster-autoscaler"]
+  verbs: ["get", "update", "patch", "delete"]
+# accessing & modifying cluster state (nodes & pods)
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["nodes/status"]
+  verbs: ["update", "patch", "get"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "patch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["pods/eviction"]
+  verbs: ["create"]
+# read-only access to cluster state
+- apiGroups: [""]
+  resources: ["services", "replicationcontrollers", "persistentvolumes", "persistentvolumeclaims", "resourcequotas"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "replicasets", "deployments"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses", "csinodes", "csistoragecapacities", "csidrivers", "volumeattachments"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["nodemanagement.gke.io"]
+  resources: ["updateinfos"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["autoscaling.gke.io"]
+  resources: ["nodeprovisioningconfigs", "nodeprovisioningconfigs/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["cloud.google.com"]
+  resources: ["computeclasses", "computeclasses/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["cloud.google.com"]
+  resources: ["machineconfigs", "machineconfigs/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["resource.k8s.io"]
+  resources: ["resourceclaims", "resourceslices", "deviceclasses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["podtemplates"]
+  verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+# scale subresource access for the buffer controller (note: scale does not support list and watch)
+- apiGroups: [""]
+  resources: ["replicationcontrollers/scale"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  resources: ["replicasets/scale", "deployments/scale", "statefulsets/scale"]
+  verbs: ["get"]
+- apiGroups: ["batch"]
+  resources: ["jobs/scale"]
+  verbs: ["get"]
+- apiGroups: ["extensions.agents.x-k8s.io"]
+  resources: ["sandboxwarmpools/scale"]
+  verbs: ["get"]
+# misc access
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["cluster-autoscaler-status"]
+  verbs: ["get", "update", "patch", "delete"]
+- apiGroups: ["networking.gke.io"]
+  resources: ["gkenetworkparamsets"]
+  verbs: ["get", "list", "watch"]
+# {{ if .MultitenancyEnabled }}
+- apiGroups: ["cloud.gke.io"]
+  resources: ["providerconfigs"]
+  verbs: ["get", "list", "watch"]
+# {{ end }}
+- apiGroups: ["autoscaling.x-k8s.io"]
+  resources: ["capacitybuffers", "capacitybuffers/status"]
+  verbs: ["get", "watch", "list", "patch", "create", "delete", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-autoscaler
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+  annotations:
+    components.gke.io/layer: addon
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-autoscaler
+subjects:
+- kind: User
+  name: system:cluster-autoscaler
+  namespace: kube-system

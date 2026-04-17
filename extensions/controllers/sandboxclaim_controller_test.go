@@ -1291,6 +1291,101 @@ func TestSandboxClaimCreationMetric(t *testing.T) {
 	})
 }
 
+func TestUpdateClaimRates(t *testing.T) {
+	scheme := newScheme(t)
+
+	now := time.Now()
+	twoMinutesAgo := now.Add(-2 * time.Minute)
+
+	claims := []client.Object{
+		&extensionsv1alpha1.SandboxClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "claim-active", Namespace: "default", CreationTimestamp: metav1.Time{Time: now}},
+			Spec:       extensionsv1alpha1.SandboxClaimSpec{TemplateRef: extensionsv1alpha1.SandboxTemplateRef{Name: "tpl-1"}},
+			Status:     extensionsv1alpha1.SandboxClaimStatus{Conditions: []metav1.Condition{{Type: string(sandboxv1alpha1.SandboxConditionReady), Status: metav1.ConditionFalse}}},
+		},
+		&extensionsv1alpha1.SandboxClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "claim-pending-old", Namespace: "default", CreationTimestamp: metav1.Time{Time: twoMinutesAgo}},
+			Spec:       extensionsv1alpha1.SandboxClaimSpec{TemplateRef: extensionsv1alpha1.SandboxTemplateRef{Name: "tpl-1"}},
+			Status:     extensionsv1alpha1.SandboxClaimStatus{Conditions: []metav1.Condition{{Type: string(sandboxv1alpha1.SandboxConditionReady), Status: metav1.ConditionFalse}}},
+		},
+		&extensionsv1alpha1.SandboxClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "claim-ready", Namespace: "default", CreationTimestamp: metav1.Time{Time: now}},
+			Spec:       extensionsv1alpha1.SandboxClaimSpec{TemplateRef: extensionsv1alpha1.SandboxTemplateRef{Name: "tpl-1"}},
+			Status:     extensionsv1alpha1.SandboxClaimStatus{Conditions: []metav1.Condition{{Type: string(sandboxv1alpha1.SandboxConditionReady), Status: metav1.ConditionTrue}}},
+		},
+		&extensionsv1alpha1.SandboxClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "claim-different-tpl", Namespace: "default", CreationTimestamp: metav1.Time{Time: now}},
+			Spec:       extensionsv1alpha1.SandboxClaimSpec{TemplateRef: extensionsv1alpha1.SandboxTemplateRef{Name: "tpl-2"}},
+			Status:     extensionsv1alpha1.SandboxClaimStatus{Conditions: []metav1.Condition{{Type: string(sandboxv1alpha1.SandboxConditionReady), Status: metav1.ConditionFalse}}},
+		},
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(claims...).Build()
+
+	reconciler := &SandboxClaimReconciler{
+		Client: client,
+		Scheme: scheme,
+	}
+
+	activeGauges := make(map[string]map[string]bool)
+
+	// Reset metrics before test
+	asmetrics.SandboxClaimPerMinute.Reset()
+	asmetrics.SandboxClaimPending.Reset()
+
+	reconciler.updateClaimRates(context.Background(), activeGauges)
+
+	// Verify tpl-1
+	rate1 := testutil.ToFloat64(asmetrics.SandboxClaimPerMinute.WithLabelValues("default", "tpl-1"))
+	pending1 := testutil.ToFloat64(asmetrics.SandboxClaimPending.WithLabelValues("default", "tpl-1"))
+
+	if rate1 != 2 {
+		t.Errorf("Expected rate for tpl-1 to be 2, got %v", rate1)
+	}
+	if pending1 != 2 {
+		t.Errorf("Expected pending for tpl-1 to be 2, got %v", pending1)
+	}
+
+	// Verify tpl-2
+	rate2 := testutil.ToFloat64(asmetrics.SandboxClaimPerMinute.WithLabelValues("default", "tpl-2"))
+	pending2 := testutil.ToFloat64(asmetrics.SandboxClaimPending.WithLabelValues("default", "tpl-2"))
+
+	if rate2 != 1 {
+		t.Errorf("Expected rate for tpl-2 to be 1, got %v", rate2)
+	}
+	if pending2 != 1 {
+		t.Errorf("Expected pending for tpl-2 to be 1, got %v", pending2)
+	}
+
+	// Test Resetting
+	if !activeGauges["default"]["tpl-1"] {
+		t.Error("Expected tpl-1 to be in activeGauges")
+	}
+	if !activeGauges["default"]["tpl-2"] {
+		t.Error("Expected tpl-2 to be in activeGauges")
+	}
+
+	// Now create a new client with no claims
+	clientEmpty := fake.NewClientBuilder().WithScheme(scheme).Build()
+	reconciler.Client = clientEmpty
+
+	reconciler.updateClaimRates(context.Background(), activeGauges)
+
+	rate1_reset := testutil.ToFloat64(asmetrics.SandboxClaimPerMinute.WithLabelValues("default", "tpl-1"))
+	pending1_reset := testutil.ToFloat64(asmetrics.SandboxClaimPending.WithLabelValues("default", "tpl-1"))
+
+	if rate1_reset != 0 {
+		t.Errorf("Expected reset rate for tpl-1 to be 0, got %v", rate1_reset)
+	}
+	if pending1_reset != 0 {
+		t.Errorf("Expected reset pending for tpl-1 to be 0, got %v", pending1_reset)
+	}
+
+	if activeGauges["default"]["tpl-1"] {
+		t.Error("Expected tpl-1 to be removed from activeGauges")
+	}
+}
+
 func newScheme(t *testing.T) *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	if err := sandboxv1alpha1.AddToScheme(scheme); err != nil {

@@ -1,0 +1,31 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-warmpool-hpa
+  namespace: sandbox-test # Namespace of the SandboxWarmPool
+spec:
+  scaleTargetRef:
+    apiVersion: extensions.agents.x-k8s.io/v1alpha1
+    kind: SandboxWarmPool
+    name: python-sdk-warmpool
+  minReplicas: 10
+  maxReplicas: 100
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: "prometheus.googleapis.com|agent_sandbox_claim_creation_total|counter"
+      target:
+        # type: AverageValue
+        # averageValue: "0.033" # Target claims per minute per SandboxWarmPool replica
+        type: Value 
+        value: 0.5
+
+
+# "prometheus.googleapis.com|agent_sandbox_claim_per_minute|gauge"
+# "prometheus.googleapis.com|agent_sandbox_claim_creation_total|counter"
+
+
+
+# 1 claim per second - around 30 replicas should be created (2 claim per minute)
+# 1 claim per second - for 10 mins 

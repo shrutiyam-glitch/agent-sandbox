@@ -683,40 +683,82 @@ func (r *SandboxClaimReconciler) updateClaimRates(ctx context.Context, activeGau
 
 	// count per namespace and template
 	counts := make(map[string]map[string]int)
+	pendingCounts := make(map[string]map[string]int)
+
+	// Collect all unique (ns, tpl) keys
+	allKeys := make(map[string]map[string]bool)
 
 	for _, c := range claims.Items {
+		ns := c.Namespace
+		tpl := c.Spec.TemplateRef.Name
+
+		if allKeys[ns] == nil {
+			allKeys[ns] = make(map[string]bool)
+		}
+		allKeys[ns][tpl] = true
+
 		if c.CreationTimestamp.Time.After(oneMinuteAgo) {
-			ns := c.Namespace
-			tpl := c.Spec.TemplateRef.Name
 			if counts[ns] == nil {
 				counts[ns] = make(map[string]int)
 			}
 			counts[ns][tpl]++
 		}
-	}
 
-	// Update gauges
-	currentGauges := make(map[string]map[string]bool)
-	for ns, templates := range counts {
-		if currentGauges[ns] == nil {
-			currentGauges[ns] = make(map[string]bool)
-		}
-		for tpl, count := range templates {
-			asmetrics.RecordSandboxClaimPerMinute(ns, tpl, float64(count))
-			currentGauges[ns][tpl] = true
-			if activeGauges[ns] == nil {
-				activeGauges[ns] = make(map[string]bool)
+		// Count pending claims
+		isExpired, _ := r.checkExpiration(&c)
+		if !isExpired && c.DeletionTimestamp.IsZero() {
+			readyCond := meta.FindStatusCondition(c.Status.Conditions, string(v1alpha1.SandboxConditionReady))
+			if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
+				if pendingCounts[ns] == nil {
+					pendingCounts[ns] = make(map[string]int)
+				}
+				pendingCounts[ns][tpl]++
 			}
-			activeGauges[ns][tpl] = true
 		}
 	}
 
-	// Reset any gauges that were active but are no longer in the current window to 0
+	// Also add keys from activeGauges to ensure we consider them for resetting
 	for ns, templates := range activeGauges {
+		if allKeys[ns] == nil {
+			allKeys[ns] = make(map[string]bool)
+		}
 		for tpl := range templates {
-			if !currentGauges[ns][tpl] {
-				asmetrics.RecordSandboxClaimPerMinute(ns, tpl, 0.0)
-				delete(activeGauges[ns], tpl)
+			allKeys[ns][tpl] = true
+		}
+	}
+
+	// Update gauges for all considered keys
+	for ns, templates := range allKeys {
+		for tpl := range templates {
+			rate := float64(counts[ns][tpl])
+			pending := float64(pendingCounts[ns][tpl])
+
+			// Record if non-zero, or if it was active before (to reset to 0)
+			wasActive := activeGauges[ns] != nil && activeGauges[ns][tpl]
+
+			if rate > 0 || wasActive {
+				asmetrics.RecordSandboxClaimPerMinute(ns, tpl, rate)
+			}
+
+			if pending > 0 || wasActive {
+				asmetrics.RecordSandboxClaimPending(ns, tpl, pending)
+			}
+
+			// Update activeGauges state
+			if rate > 0 || pending > 0 {
+				if activeGauges[ns] == nil {
+					activeGauges[ns] = make(map[string]bool)
+				}
+				activeGauges[ns][tpl] = true
+			} else {
+				// Both are 0
+				if wasActive {
+					// We just recorded 0, so we can stop tracking it now if it remains 0.
+					delete(activeGauges[ns], tpl)
+					if len(activeGauges[ns]) == 0 {
+						delete(activeGauges, ns)
+					}
+				}
 			}
 		}
 	}

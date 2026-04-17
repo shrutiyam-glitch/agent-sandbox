@@ -11,7 +11,7 @@ spec:
             app: agent-sandbox-workload # Ensure this matches the labels on your sandbox pods
         containers:
           - endpoint:
-              port: 8080
+              port: 9091 #8080
               path: /metrics
             metrics:
               - gauge:
