@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TODO: delete the agetn sandbox pod 
+# wait for 10 s 
+
 
 RUN_ID=$(date +%Y%m%d-%H%M%S)
 if [ -n "$1" ]; then
@@ -20,16 +23,16 @@ if [ -n "$1" ]; then
 fi
 
 # BURST_SIZE * TOTAL_BURSTS = Total sandbox claims created
-BURST_SIZE=1000
-QPS=1000
-TOTAL_BURSTS=10
-WARMPOOL_SIZE=1000
+BURST_SIZE=300
+QPS=300
+TOTAL_BURSTS=2
+WARMPOOL_SIZE=600
 RUNTIME_CLASS="" # Change to "gvisor" if your cluster supports it
 
 # Update these paths to match your environment
 # Clusterloader2 must be cloned or forked from https://github.com/kubernetes/perf-tests
-CL2_DIR="${HOME}/perf-tests/clusterloader2"
-AGENTS_DIR="${HOME}/agent-sandbox"
+CL2_DIR="${HOME}/Documents/hpa/perf-tests/clusterloader2"
+AGENTS_DIR="${HOME}/Documents/hpa/agent-sandbox"
 TEST_DIR="${AGENTS_DIR}/dev/load-test/test-recipes"
 TEST_CONFIG="${TEST_DIR}/rapid-burst-test.yaml"
 LOGS_DIR="${TEST_DIR}/tmp/${RUN_ID}"

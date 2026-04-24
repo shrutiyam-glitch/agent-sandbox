@@ -3,7 +3,7 @@ kind: SandboxTemplate
 metadata:
   # The test_client.py expects the template to have this name
   name: python-sandbox-template
-  namespace: sandbox-test
+  namespace: cb-test
 spec:
   podTemplate:
     spec:

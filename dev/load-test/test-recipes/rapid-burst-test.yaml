@@ -96,6 +96,34 @@ steps:
         TemplateName: template-0
         Replicas: {{$warmpool_size}}
 
+- name: Setup Capacity Buffer and HPA  
+  phases:  
+  - namespaceRange: {min: 1, max: {{$namespaces}}}  
+    replicasPerNamespace: 1  
+    tuningSet: BurstCreate  
+    objectBundle:  
+    - basename: capacity-buffer  
+      objectTemplatePath: templates/cluster-loader-capacity-buffer.yaml  
+      templateFillMap:  
+        Percentage: 100  
+        WarmPoolName: warmpool-0  
+        ProvisioningStrategy: buffer.gke.io/standby-capacity 
+    - basename: hpa  
+      objectTemplatePath: templates/cluster-loader-hpa.yaml  
+      templateFillMap:  
+        WarmPoolName: warmpool-0  
+        MinReplicas: 600
+        MaxReplicas: 1000  
+        MetricName: prometheus.googleapis.com|agent_sandbox_claim_creation_total|counter  
+        TargetValue: 0.5
+
+- name: Pause 60 Seconds After Capacity Buffer and HPA Setup
+  measurements:
+  - Identifier: WaitAfterCapacityBufferAndHpaSetup
+    Method: Sleep
+    Params:
+      duration: 60s
+
 - name: Wait for Warm Pool Sandboxes to be Ready
   measurements:
   - Identifier: WaitForWarmPoolSandboxes
@@ -112,6 +140,13 @@ steps:
       minDesiredObjectCount: {{MultiplyInt $warmpool_size $namespaces}}
       maxFailedObjectCount: 0
       timeout: 15m
+
+- name: Pause 4 Minutes for extra nodes to be provisioned and go to suspend state
+  measurements:
+  - Identifier: WaitAfterCapacityBufferAndHpaSetup
+    Method: Sleep
+    Params:
+      duration: 4m
 
 # --- START BURST LOOP ---
 {{range $i := Loop $totalBursts}}
@@ -146,12 +181,12 @@ steps:
       timeout: 60m
       refreshInterval: 20ms
 
-- name: Pause 20 Seconds After Burst {{$burstIteration}}
+- name: Pause 60 Seconds After Burst {{$burstIteration}}
   measurements:
   - Identifier: WaitAfterBurst{{$burstIteration}}
     Method: Sleep
     Params:
-      duration: 20s
+      duration: 60s
 {{end}}
 # --- END BURST LOOP ---
 

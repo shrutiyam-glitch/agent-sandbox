@@ -2,7 +2,7 @@ apiVersion: autoscaling.x-k8s.io/v1beta1
 kind: CapacityBuffer
 metadata:
   name: agent-warmpool-buffer
-  namespace: sandbox-test
+  namespace: cb-test
 spec:
   # Maintain a node buffer equal to 200% of the SandboxWarmPool's replicas
   percentage: 200
@@ -14,4 +14,4 @@ spec:
   # The strategy for provisioning. 
   # cold-capacity creates suspended VMs that resume in ~30s.
   # active-capacity triggers immediate scale-up.
-  provisioningStrategy: "buffer.gke.io/cold-capacity"
+  provisioningStrategy: "buffer.gke.io/standby-capacity"

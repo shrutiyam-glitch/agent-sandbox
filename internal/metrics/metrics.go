@@ -122,6 +122,7 @@ var (
 			Help: "Current number of pending SandboxClaims.",
 		},
 		[]string{"namespace", "sandbox_template"},
+	)
 
 	// AgentSandboxesDesc describes the agent_sandboxes metric point-in-time counts.
 	// Labels:
