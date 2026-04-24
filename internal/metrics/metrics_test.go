@@ -16,10 +16,12 @@
 package metrics
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"sigs.k8s.io/agent-sandbox/internal/version"
 )
 
 func TestClaimLatencyRecording(t *testing.T) {
@@ -105,5 +107,17 @@ func TestSandboxClaimPerMinuteRecording(t *testing.T) {
 
 	if testutil.CollectAndCount(SandboxClaimPerMinute) != 1 {
 		t.Errorf("Expected 1 observation")
+	}
+}
+
+func TestBuildInfo(t *testing.T) {
+	expected := strings.TrimSpace(`
+		# HELP agent_sandbox_build_info Agent sandbox controller build metadata exposed as labels with a constant value of 1.
+		# TYPE agent_sandbox_build_info gauge
+		agent_sandbox_build_info{build_date="`+version.Get().BuildDate+`",compiler="`+version.Get().Compiler+`",git_commit="`+version.Get().GitSHA+`",git_version="`+version.Get().GitVersion+`",go_version="`+version.Get().GoVersion+`",platform="`+version.Get().Platform+`"} 1
+	`) + "\n"
+
+	if err := testutil.CollectAndCompare(BuildInfo, strings.NewReader(expected)); err != nil {
+		t.Errorf("BuildInfo metric mismatch: %v", err)
 	}
 }
