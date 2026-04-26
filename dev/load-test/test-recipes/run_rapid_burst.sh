@@ -25,7 +25,7 @@ fi
 # BURST_SIZE * TOTAL_BURSTS = Total sandbox claims created
 BURST_SIZE=300
 QPS=300
-TOTAL_BURSTS=2
+TOTAL_BURSTS=5
 WARMPOOL_SIZE=600
 RUNTIME_CLASS="" # Change to "gvisor" if your cluster supports it
 

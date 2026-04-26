@@ -113,9 +113,9 @@ steps:
       templateFillMap:  
         WarmPoolName: warmpool-0  
         MinReplicas: 600
-        MaxReplicas: 1000  
+        MaxReplicas: 1500  
         MetricName: prometheus.googleapis.com|agent_sandbox_claim_creation_total|counter  
-        TargetValue: 0.5
+        TargetValue: 0.2
 
 - name: Pause 60 Seconds After Capacity Buffer and HPA Setup
   measurements:
@@ -141,7 +141,7 @@ steps:
       maxFailedObjectCount: 0
       timeout: 15m
 
-- name: Pause 4 Minutes for extra nodes to be provisioned and go to suspend state
+- name: Pause 4 Minutes for extra nodes to be provisioned by CSN and go to suspend state
   measurements:
   - Identifier: WaitAfterCapacityBufferAndHpaSetup
     Method: Sleep
