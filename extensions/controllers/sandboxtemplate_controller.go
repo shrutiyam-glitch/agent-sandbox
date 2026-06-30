@@ -64,6 +64,14 @@ func (r *SandboxTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	ctx, end := r.Tracer.StartSpan(ctx, template, "ReconcileSandboxTemplate", nil)
 	defer end()
 
+	// 2. Validate Volume Claim Templates
+	if validationErr := validateVolumeClaimTemplates(template.Spec.VolumeClaimTemplates); validationErr != nil {
+		if r.Recorder != nil {
+			r.Recorder.Eventf(template, nil, "Warning", "InvalidVolumeClaimTemplates", "Validation", "Volume claim templates are invalid: %v", validationErr)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.ensureTemplateRefHashLabel(ctx, template); err != nil {
 		return ctrl.Result{}, err
 	}

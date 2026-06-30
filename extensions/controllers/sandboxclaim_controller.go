@@ -1341,19 +1341,6 @@ func mergeVolumeClaimTemplates(
 	}
 }
 
-func validateVolumeClaimTemplates(vcts []v1beta1.PersistentVolumeClaimTemplate) error {
-	names := make(map[string]struct{}, len(vcts))
-	for i, vct := range vcts {
-		if vct.Name == "" {
-			return fmt.Errorf("%w: name at index %d is empty", ErrVolumeClaimTemplatesInvalid, i)
-		}
-		if _, exists := names[vct.Name]; exists {
-			return fmt.Errorf("%w: duplicate name %q", ErrVolumeClaimTemplatesInvalid, vct.Name)
-		}
-		names[vct.Name] = struct{}{}
-	}
-	return nil
-}
 
 // migrateLegacyAssignedSandboxLabel migrates legacy assigned Sandbox name from label to annotation.
 func (r *SandboxClaimReconciler) migrateLegacyAssignedSandboxLabel(ctx context.Context, claim *extensionsv1beta1.SandboxClaim, sbName string) error {

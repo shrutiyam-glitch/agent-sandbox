@@ -15,7 +15,10 @@
 package controllers
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
+	sandboxv1beta1 "sigs.k8s.io/agent-sandbox/api/v1beta1"
 	sandboxcontrollers "sigs.k8s.io/agent-sandbox/controllers"
 	extensionsv1beta1 "sigs.k8s.io/agent-sandbox/extensions/api/v1beta1"
 )
@@ -50,4 +53,18 @@ func ApplySandboxSecureDefaults(template *extensionsv1beta1.SandboxTemplate, spe
 // SandboxTemplateRefHash encapsulates the generation of the hash for a sandbox template ref.
 func SandboxTemplateRefHash(templateRefName string) string {
 	return sandboxcontrollers.NameHash(templateRefName)
+}
+
+func validateVolumeClaimTemplates(vcts []sandboxv1beta1.PersistentVolumeClaimTemplate) error {
+	names := make(map[string]struct{}, len(vcts))
+	for i, vct := range vcts {
+		if vct.Name == "" {
+			return fmt.Errorf("%w: name at index %d is empty", ErrVolumeClaimTemplatesInvalid, i)
+		}
+		if _, exists := names[vct.Name]; exists {
+			return fmt.Errorf("%w: duplicate name %q", ErrVolumeClaimTemplatesInvalid, vct.Name)
+		}
+		names[vct.Name] = struct{}{}
+	}
+	return nil
 }

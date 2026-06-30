@@ -371,3 +371,161 @@ func TestSandboxTemplateReconcile_Vulnerability(t *testing.T) {
 		}
 	})
 }
+
+func TestSandboxTemplateReconcileVolumeClaimTemplatesValidation(t *testing.T) {
+	scheme := newScheme(t)
+
+	t.Run("Valid Volume Claim Templates", func(t *testing.T) {
+		template := &extensionsv1beta1.SandboxTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "valid-template", Namespace: "default"},
+			Spec: extensionsv1beta1.SandboxTemplateSpec{
+				PodTemplate: sandboxv1beta1.PodTemplate{
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c1", Image: "img"}}},
+				},
+				VolumeClaimTemplates: []sandboxv1beta1.PersistentVolumeClaimTemplate{
+					{
+						EmbeddedObjectMetadata: sandboxv1beta1.EmbeddedObjectMetadata{Name: "v1"},
+						Spec:                   corev1.PersistentVolumeClaimSpec{},
+					},
+					{
+						EmbeddedObjectMetadata: sandboxv1beta1.EmbeddedObjectMetadata{Name: "v2"},
+						Spec:                   corev1.PersistentVolumeClaimSpec{},
+					},
+				},
+			},
+		}
+
+		client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(template).Build()
+		recorder := events.NewFakeRecorder(10)
+		reconciler := &SandboxTemplateReconciler{
+			Client:   client,
+			Scheme:   scheme,
+			Recorder: recorder,
+			Tracer:   asmetrics.NewNoOp(),
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: template.Name, Namespace: template.Namespace},
+		}
+
+		_, err := reconciler.Reconcile(context.Background(), req)
+		if err != nil {
+			t.Fatalf("reconcile failed: %v", err)
+		}
+
+		// Verify NetworkPolicy is created
+		var np networkingv1.NetworkPolicy
+		npName := types.NamespacedName{Name: template.Name + "-network-policy", Namespace: template.Namespace}
+		if err := client.Get(context.Background(), npName, &np); err != nil {
+			t.Fatalf("expected NetworkPolicy to exist, got err: %v", err)
+		}
+	})
+
+	t.Run("Duplicate Volume Claim Template Names", func(t *testing.T) {
+		template := &extensionsv1beta1.SandboxTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "duplicate-template", Namespace: "default"},
+			Spec: extensionsv1beta1.SandboxTemplateSpec{
+				PodTemplate: sandboxv1beta1.PodTemplate{
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c1", Image: "img"}}},
+				},
+				VolumeClaimTemplates: []sandboxv1beta1.PersistentVolumeClaimTemplate{
+					{
+						EmbeddedObjectMetadata: sandboxv1beta1.EmbeddedObjectMetadata{Name: "duplicate-vct"},
+						Spec:                   corev1.PersistentVolumeClaimSpec{},
+					},
+					{
+						EmbeddedObjectMetadata: sandboxv1beta1.EmbeddedObjectMetadata{Name: "duplicate-vct"},
+						Spec:                   corev1.PersistentVolumeClaimSpec{},
+					},
+				},
+			},
+		}
+
+		client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(template).Build()
+		recorder := events.NewFakeRecorder(10)
+		reconciler := &SandboxTemplateReconciler{
+			Client:   client,
+			Scheme:   scheme,
+			Recorder: recorder,
+			Tracer:   asmetrics.NewNoOp(),
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: template.Name, Namespace: template.Namespace},
+		}
+
+		_, err := reconciler.Reconcile(context.Background(), req)
+		if err != nil {
+			t.Fatalf("reconcile failed: %v", err)
+		}
+
+		// Verify NetworkPolicy is NOT created
+		var np networkingv1.NetworkPolicy
+		npName := types.NamespacedName{Name: template.Name + "-network-policy", Namespace: template.Namespace}
+		if err := client.Get(context.Background(), npName, &np); !k8errors.IsNotFound(err) {
+			t.Fatalf("expected NetworkPolicy to not exist, got err: %v", err)
+		}
+
+		// Expect warning event
+		select {
+		case ev := <-recorder.Events:
+			if ev != "Warning InvalidVolumeClaimTemplates Volume claim templates are invalid: duplicate name \"duplicate-vct\"" {
+				t.Logf("got event: %s", ev)
+			}
+		default:
+			t.Errorf("expected warning event, got none")
+		}
+	})
+
+	t.Run("Empty Volume Claim Template Name", func(t *testing.T) {
+		template := &extensionsv1beta1.SandboxTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "empty-template", Namespace: "default"},
+			Spec: extensionsv1beta1.SandboxTemplateSpec{
+				PodTemplate: sandboxv1beta1.PodTemplate{
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c1", Image: "img"}}},
+				},
+				VolumeClaimTemplates: []sandboxv1beta1.PersistentVolumeClaimTemplate{
+					{
+						EmbeddedObjectMetadata: sandboxv1beta1.EmbeddedObjectMetadata{Name: ""},
+						Spec:                   corev1.PersistentVolumeClaimSpec{},
+					},
+				},
+			},
+		}
+
+		client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(template).Build()
+		recorder := events.NewFakeRecorder(10)
+		reconciler := &SandboxTemplateReconciler{
+			Client:   client,
+			Scheme:   scheme,
+			Recorder: recorder,
+			Tracer:   asmetrics.NewNoOp(),
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: template.Name, Namespace: template.Namespace},
+		}
+
+		_, err := reconciler.Reconcile(context.Background(), req)
+		if err != nil {
+			t.Fatalf("reconcile failed: %v", err)
+		}
+
+		// Verify NetworkPolicy is NOT created
+		var np networkingv1.NetworkPolicy
+		npName := types.NamespacedName{Name: template.Name + "-network-policy", Namespace: template.Namespace}
+		if err := client.Get(context.Background(), npName, &np); !k8errors.IsNotFound(err) {
+			t.Fatalf("expected NetworkPolicy to not exist, got err: %v", err)
+		}
+
+		// Expect warning event
+		select {
+		case ev := <-recorder.Events:
+			if ev != "Warning InvalidVolumeClaimTemplates Volume claim templates are invalid: name at index 0 is empty" {
+				t.Logf("got event: %s", ev)
+			}
+		default:
+			t.Errorf("expected warning event, got none")
+		}
+	})
+}
